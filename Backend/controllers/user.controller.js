@@ -40,7 +40,7 @@ export const loginController = async (req, res) => {
 
     const isMatch = await user.isValidPassword(password);
     if (!isMatch) {
-      returnres.status(401).json({
+      return res.status(401).json({
         errors: "Invalid credentials",
       });
     }
