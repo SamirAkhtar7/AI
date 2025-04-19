@@ -1,6 +1,6 @@
-import React, { useState, useContext } from "react";
+import React, { useState,  } from "react";
 import { Link, useNavigate } from "react-router-dom";
-
+import axios from "../config/axios";
 
 
 const Login = () => {
@@ -8,14 +8,25 @@ const Login = () => {
   const [password, setPassword] = useState("");
 
 
-
   const navigate = useNavigate();
 
-  function submitHandler(e) {
-    e.preventDefault();
+function submitHandler(e) {
+  e.preventDefault();
 
- 
-  }
+  axios
+    .post("/users/login", {
+      email,
+      password,
+    })
+    .then((res) => {
+      console.log(res.data);
+      navigate("/");
+    })
+    .catch((err) => {
+      console.error("Login error:", err); // Log the entire error object
+      console.log(err.response?.data || "An unexpected error occurred."); // Safely access err.response.data
+    });
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900">
