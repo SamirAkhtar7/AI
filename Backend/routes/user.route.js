@@ -37,3 +37,4 @@ router.get(
 
 router.get('/all',authMiddleware.authUser,userController.getAllUsersControoler)
 export default router;
+

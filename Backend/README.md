@@ -2,7 +2,9 @@
 
 This document provides details about the available endpoints in the backend application.
 
-## Endpoints
+---
+
+## User Routes
 
 ### 1. **Register User**
 
@@ -92,7 +94,30 @@ This document provides details about the available endpoints in the backend appl
 
 ---
 
-### 5. **Create Project**
+### 5. **Get All Users**
+
+- **URL**: `/users/all`
+- **Description**: Retrieves all users except the currently logged-in user.
+- **HTTP Method**: `GET`
+- **Headers**:
+  ```
+  Authorization: Bearer <JWT_TOKEN>
+  ```
+- **Response**:
+  ```json
+  {
+    "allUser": [
+      { "email": "user1@example.com" },
+      { "email": "user2@example.com" }
+    ]
+  }
+  ```
+
+---
+
+## Project Routes
+
+### 1. **Create Project**
 
 - **URL**: `/projects/create`
 - **Description**: Creates a new project for the authenticated user.
@@ -119,13 +144,90 @@ This document provides details about the available endpoints in the backend appl
 
 ---
 
+### 2. **Get All Projects**
+
+- **URL**: `/projects/all`
+- **Description**: Retrieves all projects for the authenticated user.
+- **HTTP Method**: `GET`
+- **Headers**:
+  ```
+  Authorization: Bearer <JWT_TOKEN>
+  ```
+- **Response**:
+  ```json
+  {
+    "projects": [
+      {
+        "_id": "64f1c2e5b5d6f2a1c8e9b456",
+        "name": "my project",
+        "users": ["64f1c2e5b5d6f2a1c8e9b123"]
+      }
+    ]
+  }
+  ```
+
+---
+
+### 3. **Add User to Project**
+
+- **URL**: `/projects/add-user`
+- **Description**: Adds users to an existing project.
+- **HTTP Method**: `PUT`
+- **Headers**:
+  ```
+  Authorization: Bearer <JWT_TOKEN>
+  ```
+- **Request Body**:
+  ```json
+  {
+    "projectId": "64f1c2e5b5d6f2a1c8e9b456",
+    "users": ["64f1c2e5b5d6f2a1c8e9b789"]
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "project": {
+      "_id": "64f1c2e5b5d6f2a1c8e9b456",
+      "name": "my project",
+      "users": ["64f1c2e5b5d6f2a1c8e9b123", "64f1c2e5b5d6f2a1c8e9b789"],
+      "__v": 1
+    }
+  }
+  ```
+
+---
+
+### 4. **Get Project by ID**
+
+- **URL**: `/projects/get-project/:projectId`
+- **Description**: Retrieves a project by its ID.
+- **HTTP Method**: `GET`
+- **Headers**:
+  ```
+  Authorization: Bearer <JWT_TOKEN>
+  ```
+- **Response**:
+  ```json
+  {
+    "project": {
+      "_id": "64f1c2e5b5d6f2a1c8e9b456",
+      "name": "my project",
+      "users": ["64f1c2e5b5d6f2a1c8e9b123"],
+      "__v": 0
+    }
+  }
+  ```
+
+---
+
 ### Notes
 
-- For all `POST` requests, include the following header:
+- For all `POST` and `PUT` requests, include the following header:
   ```
   Content-Type: application/json
   ```
-- For protected routes (`/users/profile`, `/users/logout`, and `/projects/create`), include the following header:
+- For protected routes, include the following header:
   ```
   Authorization: Bearer <JWT_TOKEN>
   ```
