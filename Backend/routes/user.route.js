@@ -29,6 +29,11 @@ router.get(
   userController.profileController
 );
 
-router.get('/logout',authMiddleware.authUser,userController.loggoutController)
+router.get(
+  "/logout",
+  authMiddleware.authUser,
+  userController.loggoutController
+);
+
 
 export default router;
