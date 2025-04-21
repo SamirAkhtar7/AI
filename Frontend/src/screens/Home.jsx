@@ -1,46 +1,81 @@
-import React, { useContext, useState ,useRef } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { UserContext } from "../context/user.context";
 import axios from "../config/axios";
+import { useNavigate } from "react-router-dom";
 
 const Home = () => {
   const { user } = useContext(UserContext);
-  const [projectName, setProjectName] = useState(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [projectName, setProjectName] = useState("");
+  const [project, setProject] = useState([]); // Initialize as an empty array
 
+  const navigate = useNavigate();
 
-  const createProject = (e) => {
-    e.preventDefault()
-    console.log(projectName)
+  function createProject(e) {
+    e.preventDefault();
+    console.log({ projectName });
 
-    axios.post("/projects/create", {
-      name:projectName
-    }).then((res) => {
-      console.log(res)
-      setIsModalOpen(false)
-      
-    }).catch((err)=>{console.log(err)})
-   
+    axios
+      .post("/projects/create", {
+        name: projectName,
+      })
+      .then((res) => {
+        console.log(res);
+        setIsModalOpen(false);
+        setProject((prevProjects) => [...prevProjects, res.data]); // Add the new project to the list
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   }
 
-
-
-
-
-
-
+  useEffect(() => {
+    axios
+      .get("/projects/all")
+      .then((res) => {
+        setProject(res.data.projects || []); // Ensure projects is an array
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  }, []);
 
   return (
     <main className="p-4">
-      <div className="projects">
+      <div className="projects flex flex-wrap gap-3">
         <button
-          onClick={() => {
-            setIsModalOpen(true);
-          }}
-          className="project p-4 border border-slate-300"
+          onClick={() => setIsModalOpen(true)}
+          className="project p-4 border border-slate-300 rounded-md"
         >
           New Project
-          <i className="ri-add-large-fill ml-2"></i>
+          <i className="ri-link ml-2"></i>
         </button>
+
+        {/* Add a conditional check before calling map */}
+        {Array.isArray(project) &&
+          project.map((project) => (
+            <div 
+              key={project._id} // Use _id as the key
+              onClick={() => {
+                navigate(`/project`, {
+                  state: { project },
+                });
+              }}
+              className="project flex flex-col gap-2 cursor-pointer p-4 border border-slate-300 rounded-md min-w-52 hover:bg-slate-200"
+            >
+              <h2 className="font-semibold">{project.name}</h2>
+
+              <div className="flex gap-2">
+                <p>
+                  <small>
+                    <i className="ri-user-line"></i> Collaborators
+                  </small>
+                  :
+                </p>
+                {project.users?.length || 0}
+              </div>
+            </div>
+          ))}
       </div>
 
       {isModalOpen && (
