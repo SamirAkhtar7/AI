@@ -1,19 +1,76 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useContext } from "react";
 import gsap from "gsap";
 import { useLocation } from "react-router-dom";
+import { UserContext } from "../context/user.context";
+import axios from "../config/axios";
 
-const Project = ({ navigate }) => {
+const Project = () => {
   const container = useRef();
   const location = useLocation();
-  console.log(location.state);
+  const { user } = useContext(UserContext);
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSidePanalOpen, setIsSidePanalOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState(new Set());
+  const [users, setUsers] = useState([]);
+  const [project, setProject] = useState(location.state.project);
 
-  // Ensure the initial position of the sediPanel is -100% on X-axis
+  const handleUserClick = (id) => {
+    setSelectedUserId((prevSelectedUserId) => {
+      const newSelectedUserId = new Set(prevSelectedUserId);
+      if (newSelectedUserId.has(id)) {
+        newSelectedUserId.delete(id);
+      } else {
+        newSelectedUserId.add(id);
+      }
+      return newSelectedUserId;
+    });
+  };
+
+  const addCollaborators = () => {
+    axios
+      .put("/projects/add-user", {
+        projectId: project._id,
+        users: Array.from(selectedUserId),
+      })
+      .then((res) => {
+        // console.log("Collaborators added:", res.data);
+        setIsModalOpen(false);
+      })
+      .catch((err) => {
+        console.error("Error adding collaborators:", err);
+      });
+  };
+
+  useEffect(() => {
+
+
+   axios
+     .get(`/projects/get-project/${location.state.project._id}`)
+     .then((res) => {
+       console.log("Project data:", res.data.project); // Log the project data
+       setProject(res.data.project); // Set the project state
+     })
+     .catch((err) => {
+       console.error("Error fetching project:", err);
+     });
+
+    axios
+      .get("/users/all")
+      .then((res) => {
+        setUsers(res.data.users || []);
+      })
+      .catch((err) => {
+        console.error("Error fetching users:", err);
+      });
+  }, []);
+
+  // Initialize the side panel position
   useEffect(() => {
     gsap.set(container.current, { x: "-100%" });
   }, []);
 
+  // Animate the side panel based on `isSidePanalOpen`
   useEffect(() => {
     if (isSidePanalOpen) {
       gsap.to(container.current, {
@@ -33,11 +90,16 @@ const Project = ({ navigate }) => {
   return (
     <main className="h-screen w-screen flex">
       <section className="left relative flex flex-col h-full min-w-70 bg-teal-500">
-        <header className="flex justify-end p-2 px-4 w-full bg-slate-300">
+        <header className="flex justify-between items-center p-2 px-4 w-full bg-slate-300">
           <button
-            onClick={() => {
-              setIsSidePanalOpen(true);
-            }}
+            onClick={() => setIsModalOpen(true)}
+            className="flex p-2 px-4 gap-2 bg-blue-500 text-white rounded-md"
+          >
+            <i className="ri-add-fill mr-1"></i>
+            <p>Add collaborator</p>
+          </button>
+          <button
+            onClick={() => setIsSidePanalOpen(!isSidePanalOpen)}
             className="p-2"
           >
             <i className="ri-group-fill"></i>
@@ -58,41 +120,86 @@ const Project = ({ navigate }) => {
           </div>
           <div className="w-full flex">
             <input
-              className="p-2 px-4 border outline-none flex=groe"
+              className="p-2 px-4 border outline-none flex-grow"
               type="text"
               placeholder="Enter the message"
             />
-
-            <button className=" px-3 text-white bg-slate-950 ">
+            <button className="px-3 text-white bg-slate-950">
               <i className="ri-send-plane-fill"></i>
             </button>
           </div>
         </div>
 
+        {/* Sliding Side Panel */}
         <div
           ref={container}
-          className="sediPanel w-full h-full flex flex-col gap-2  bg-red-600 absolute z-10 top-0"
+          className="sediPanel w-full h-full flex flex-col gap-2 bg-red-600 absolute z-10 top-0"
         >
-          <header className="flex justify-end p-2 px-3 bg-slate-200">
-            <button
-              onClick={() => {
-                setIsSidePanalOpen(false);
-              }}
-            >
+          <header className="flex justify-between items-center p-2 px-3 bg-slate-200">
+            <h1 className="font-semibold"> collaborator</h1>
+            <button onClick={() => setIsSidePanalOpen(false)} className="p-2">
               <i className="ri-close-fill"></i>
             </button>
           </header>
 
-          <div className=" users flex flex-col gap-2 ">
-            <div className="user p-2 cursor-pointer hover:bg-slate-300 flex gap-2 items-center">
-              <div className="rounded-full flex justify-center items-center aspect-square w-fit h-fit p-5 bg-gray-400 text-white">
-                <i className="ri-user-fill absolute"></i>
-              </div>
-              <h2 className="font-semibold text-lg ">UserName</h2>
-            </div>
+          <div className="users flex flex-col gap-2">
+            {project && project.users && project.users.length > 0 ? (
+              project.users.map((user) => (
+                <div
+                  key={user._id}
+                  className="user cursor-pointer hover:bg-slate-200 p-2 flex gap-2 items-center"
+                >
+                  <div className="aspect-square rounded-full w-fit h-fit flex items-center justify-center p-5 text-white bg-slate-600">
+                    <i className="ri-user-fill absolute"></i>
+                  </div>
+                  <h1 className="font-semibold text-lg text-black">
+                    {user.email || "No Email"}
+                  </h1>
+                </div>
+              ))
+            ) : (
+              <p className="text-white">No users found</p>
+            )}
           </div>
         </div>
       </section>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-4 rounded-md w-96 max-w-full relative">
+            <header className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Select User</h2>
+              <button onClick={() => setIsModalOpen(false)} className="p-2">
+                <i className="ri-close-fill"></i>
+              </button>
+            </header>
+            <div className="users-list flex flex-col gap-2 mb-16 max-h-96 overflow-auto">
+              {users.map((user) => (
+                <div
+                  key={user._id}
+                  className={`user cursor-pointer hover:bg-slate-200 ${
+                    Array.from(selectedUserId).indexOf(user._id) !== -1
+                      ? "bg-slate-200"
+                      : ""
+                  } p-2 flex gap-2 items-center`}
+                  onClick={() => handleUserClick(user._id)}
+                >
+                  <div className="aspect-square relative rounded-full w-fit h-fit flex items-center justify-center p-5 text-white bg-slate-600">
+                    <i className="ri-user-fill absolute"></i>
+                  </div>
+                  <h1 className="font-semibold text-lg">{user.email}</h1>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={addCollaborators}
+              className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-blue-600 text-white rounded-md"
+            >
+              Add Collaborators
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

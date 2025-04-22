@@ -77,7 +77,7 @@ export const getAllUsersControoler = async (req, res) => {
   try {
     const loggedInUser = await userModel.findOne({email:req.user.email})
     const allUser = await userService.getAllUsers( loggedInUser._id )
-    res.status(200).json({allUser})
+   return res.status(200).json({users:allUser})
   } catch (err) {
     return res.status(400).json({error:err.message})
   }
