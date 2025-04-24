@@ -3,6 +3,11 @@ import gsap from "gsap";
 import { useLocation } from "react-router-dom";
 import { UserContext } from "../context/user.context";
 import axios from "../config/axios";
+import {
+  initializaSocket,
+  receiveMassage,
+  sendMessage,
+} from "../config/socket";
 
 const Project = () => {
   const container = useRef();
@@ -14,6 +19,7 @@ const Project = () => {
   const [selectedUserId, setSelectedUserId] = useState(new Set());
   const [users, setUsers] = useState([]);
   const [project, setProject] = useState(location.state.project);
+  const [message, setMessage] = useState("");
 
   const handleUserClick = (id) => {
     setSelectedUserId((prevSelectedUserId) => {
@@ -43,18 +49,35 @@ const Project = () => {
   };
 
   useEffect(() => {
+    if (!project || !project._id) {
+      console.error("Project ID is missing or invalid");
+      return;
+    }
 
+    // Initialize the socket connection
+    initializaSocket(project._id);
 
-   axios
-     .get(`/projects/get-project/${location.state.project._id}`)
-     .then((res) => {
-       console.log("Project data:", res.data.project); // Log the project data
-       setProject(res.data.project); // Set the project state
-     })
-     .catch((err) => {
-       console.error("Error fetching project:", err);
-     });
+    const ID = project._id;
+    
 
+    // Listen for incoming messages
+    receiveMassage("project-message", (data) => {
+      console.log("Received message:", data,project._Id);
+      console.log("Current project ID:", project._id);
+    });
+
+    // Fetch the project details
+    axios
+      .get(`/projects/get-project/${project._id}`)
+      .then((res) => {
+        console.log("Project data:", res.data.project); // Log the project data
+        setProject(res.data.project); // Set the project state
+      })
+      .catch((err) => {
+        console.error("Error fetching project:", err);
+      });
+
+    // Fetch all users
     axios
       .get("/users/all")
       .then((res) => {
@@ -86,6 +109,22 @@ const Project = () => {
       });
     }
   }, [isSidePanalOpen]);
+
+  const send = () => {
+    if (!message.trim()) {
+      console.error("Message is empty");
+      return;
+    }
+
+    sendMessage("project-message", {
+      message,
+      sender: user._id,
+      projectId: project._id, // Include the project ID
+    });
+
+    console.log("Sending message:", message);
+    setMessage("");
+  };
 
   return (
     <main className="h-screen w-screen flex">
@@ -120,11 +159,15 @@ const Project = () => {
           </div>
           <div className="w-full flex">
             <input
+              value={message}
+              onChange={(e) => {
+                setMessage(e.target.value);
+              }}
               className="p-2 px-4 border outline-none flex-grow"
               type="text"
               placeholder="Enter the message"
             />
-            <button className="px-3 text-white bg-slate-950">
+            <button onClick={send} className="px-3 text-white bg-slate-950">
               <i className="ri-send-plane-fill"></i>
             </button>
           </div>

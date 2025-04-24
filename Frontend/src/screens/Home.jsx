@@ -54,11 +54,11 @@ const Home = () => {
         {/* Add a conditional check before calling map */}
         {Array.isArray(project) &&
           project.map((project) => (
-            <div 
+            <div
               key={project._id} // Use _id as the key
               onClick={() => {
                 navigate(`/project`, {
-                  state: { project },
+                  state: { project }, // Ensure `project` is passed correctly
                 });
               }}
               className="project flex flex-col gap-2 cursor-pointer p-4 border border-slate-300 rounded-md min-w-52 hover:bg-slate-200"
