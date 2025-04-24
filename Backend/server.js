@@ -63,6 +63,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log("User disconnected from project:", socket.Project._id);
+    socket.leave(socket.roomsId)
   });
 
   // socket.on("event", (data) => {

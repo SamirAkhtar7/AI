@@ -1,1 +1,4 @@
 @import "tailwindcss";
+.message-box::-webkit-scrollbar {
+    display: none;
+}
