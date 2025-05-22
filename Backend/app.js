@@ -5,6 +5,7 @@ import userRoutes from './routes/user.route.js'
 import projectRoutes from './routes/project.route.js'
 import cookieParser from "cookie-parser";
 import cors from 'cors'
+import aiRoutes from './routes/ai.routes.js'
 
 
 
@@ -17,7 +18,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser())
 app.use('/users', userRoutes)
-app.use('/projects',projectRoutes)
+app.use('/projects', projectRoutes)
+app.use('/ai',aiRoutes)
 
 
 app.get("/", (req, res) => {
