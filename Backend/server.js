@@ -5,7 +5,8 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import projectModel from "./models/project.model.js";
-import Project from "./models/project.model.js";
+import generateAIContent from "./services/genai.service.js";  
+
 
 const port = process.env.PORT || 3000;
 
@@ -56,7 +57,27 @@ io.on("connection", (socket) => {
 
   socket.join(socket.roomId);
 
-  socket.on("project-message", (data) => {
+  socket.on("project-message",async (data) => {
+
+    const message = data.message;
+    const aiIsPresentInMessage = message.includes('@ai');
+    if (aiIsPresentInMessage) {
+      console.log("Received AI-message:"); // Debugging
+      const prompt = message.replace('@ai',"")
+      const result = await generateAIContent(prompt)
+
+      io.to(socket.roomId).emit("project-message", {
+        message:result,
+        sender: {
+          _id: 'ai',
+          name:'AI'
+        }
+       
+      });
+      return;
+    }
+
+
     console.log("Received project-message:", data); // Debugging
     socket.broadcast.to(socket.roomId).emit("project-message", data);
   });

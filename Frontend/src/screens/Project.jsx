@@ -3,12 +3,12 @@ import gsap from "gsap";
 import { useLocation } from "react-router-dom";
 import { UserContext } from "../context/user.context";
 import axios from "../config/axios";
+import { marked } from "marked"; // Install this library using `npm install marked`
 import {
   initializaSocket,
   receiveMassage,
   sendMessage,
 } from "../config/socket";
-
 const Project = () => {
   const container = useRef();
   const location = useLocation();
@@ -127,19 +127,21 @@ const Project = () => {
     console.log("Sending message:", message);
     setMessage("");
   };
+
+
   
- const scrollToBottom = () => {
-   if (messagesBox.current) {
-     messagesBox.current.scrollTop = messagesBox.current.scrollHeight;
-   }
- };
+  const scrollToBottom = () => {
+    if (messagesBox.current) {
+      messagesBox.current.scrollTop = messagesBox.current.scrollHeight;
+    }
+  };
   const appendIncomingMessage = (messageObject) => {
     const messagesBox = document.querySelector(".message-box");
     const newMessage = document.createElement("div");
 
     newMessage.classList.add(
       "mr-auto",
-      "max-w-56",
+      "max-w-96",
       "message",
       "flex",
       "flex-col",
@@ -149,12 +151,25 @@ const Project = () => {
       "rounded-md",
       "break-words"
     );
-    newMessage.innerHTML = `<small class="opacity-55 text-xs">${
-      messageObject.sender?.email || "Unknown"
-    }</small>
-      <p class="text-sm">${messageObject.message}</p>`;
+
+    const senderNameOrEmail =
+      messageObject.sender._id === "ai"
+        ? messageObject.sender.name // Use 'name' for AI messages
+        : messageObject.sender?.email || "Unknown"; // Use 'email' for user messages
+
+    if (messageObject.sender._id === "ai") {
+      // Render AI message as Markdown
+      const renderedMarkdown = marked(messageObject.message);
+      newMessage.innerHTML = `<small class="opacity-55 text-xs">${senderNameOrEmail}</small>
+        <div class="text-sm overflow-auto bg-slate-950 text-white p-2 rounded-xl ">${renderedMarkdown}</div>`;
+    } else {
+      // Render user message as plain text
+      newMessage.innerHTML = `<small class="opacity-55 text-xs">${senderNameOrEmail}</small>
+        <p class="text-sm">${messageObject.message}</p>`;
+    }
+
     messagesBox.appendChild(newMessage);
-scrollToBottom(); 
+    scrollToBottom();
   };
 
   const appendOutgoingMessage = (messageObject) => {
@@ -178,11 +193,8 @@ scrollToBottom();
     }</small>
       <p class="text-sm">${messageObject.message}</p>`;
     messagesBox.appendChild(newMessage);
-    scrollToBottom(); 
+    scrollToBottom();
   };
-
-
-
 
   return (
     <main className="h-screen w-screen flex">
@@ -204,9 +216,8 @@ scrollToBottom();
         </header>
 
         <div className="conversatoin-area flex-grow flex flex-col p-2 min-h-0">
-         <div
+          <div
             ref={messagesBox}
-           
             className="message-box flex-grow flex flex-col gap-1 overflow-y-auto  min-h-0 max-h-full"
           >
             {/* messages here */}
