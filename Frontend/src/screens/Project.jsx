@@ -20,6 +20,20 @@ const Project = () => {
   const [users, setUsers] = useState([]);
   const [project, setProject] = useState(location.state.project);
   const [message, setMessage] = useState("");
+  const [fileTree, setFileTree] = useState({
+    "app.js": {
+      content: `const express = require('expess');`,
+    },
+    "package.json": {
+      content: `{
+      "name":"temp-server"
+    }`,
+    },
+  });
+
+  const [currentFile, setCurrentFile] = useState(null);
+  const [openFile, setOpenFile] = useState([])
+
   // const [messagesBoxData, setMessagesBoxData] = useState([]);
   const messagesBox = React.createRef();
 
@@ -127,9 +141,6 @@ const Project = () => {
     console.log("Sending message:", message);
     setMessage("");
   };
-
-
-  
   const scrollToBottom = () => {
     if (messagesBox.current) {
       messagesBox.current.scrollTop = messagesBox.current.scrollHeight;
@@ -271,6 +282,66 @@ const Project = () => {
             )}
           </div>
         </div>
+      </section>
+
+      <section className="right bg-red-100 flex-grow h-full flex ">
+        <div className="explorer h-full max-w-64 min-w-52  bg-slate-300 ">
+          <div className="file-tree w-full">
+            {Object.keys(fileTree).map((file) => (
+              <button
+                key={file}
+                onClick={() => {
+                  setCurrentFile(file);
+                  setOpenFile(Array.from(new Set([...openFile, file])));
+                }}
+                className="tree-element p-2 cursor-pointer px-4 flex items-center gap-2 bg-slate-200 w-full"
+              >
+                <p className="font-semibold text-lg">{file}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {currentFile && (
+          <div className="code-editor h-full flex-grow flex flex-col">
+            <div className="top flex items-center ">
+              {openFile.map((file) => (
+                <button
+                  key={file}
+                  onClick={() => setCurrentFile(file)}
+                  className={
+                    "open-file cursor-pointer p-2 px-4 flex items-center w-fit gap-2 bg-slate-300 " +
+                    (currentFile === file ? "bg-slate-400" : "")
+                  }
+                >
+                  <p className="font-semibold text-lg"> {file}</p>
+                  <span
+                    className="p-2 cursor-pointer"
+                    onClick={e => {
+                      e.stopPropagation();
+                      // Remove only the closed file from openFile
+                      setOpenFile(openFile.filter(f => f !== file));
+                      // If the closed file is the current file, set currentFile to another open file or null
+                      if (currentFile === file) {
+                        const remainingFiles = openFile.filter(f => f !== file);
+                        setCurrentFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null);
+                      }
+                    }}
+                  >
+                    <i className="ri-close-fill"></i>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="bottom flex-grow min-h-0">
+              <textarea
+                className="p-2 bg-slate-900 text-white h-full w-full overflow-auto m-0 resize-none"
+                value={fileTree[currentFile]?.content}
+           
+              />
+            </div>
+          </div>
+        )}
       </section>
 
       {isModalOpen && (
