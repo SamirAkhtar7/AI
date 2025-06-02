@@ -457,7 +457,7 @@ const Project = () => {
                   installProcess.output.pipeTo(
                     new WritableStream({
                       write(chunk) {
-                       console.log(chunk)
+                        console.log(chunk);
                       },
                     })
                   );
@@ -473,7 +473,7 @@ const Project = () => {
                   tempRunProcess.output.pipeTo(
                     new WritableStream({
                       write(chunk) {
-                 console.log(chunk)
+                        console.log(chunk);
                       },
                     })
                   );
@@ -481,7 +481,7 @@ const Project = () => {
                   setRunProcess(tempRunProcess);
 
                   webContainer.on("server-ready", (port, url) => {
-                    console.log(port,url)
+                    console.log(port, url);
                     setIframeUrl(url);
                   });
                 }}
@@ -539,11 +539,17 @@ const Project = () => {
           </div>
         </div>
 
-        {
-          iframeUrl && webContainer &&
-          <iframe src={iframeUrl} className="w-1/2 h-full" > </iframe>
-}
-        
+        {iframeUrl && webContainer && (
+          <div className="flex flex-col min-w-9 6 h-full">
+            <div className="address-bar">
+              <input onChange={(e) => {
+                setIframeUrl(e.target.value)
+              }} type="text" value={iframeUrl} className="w-full p-2 px-4 bg-emerald-50  " name="" id="" />
+            </div>
+            <iframe src={iframeUrl} className="w-full h-full">
+            </iframe>
+          </div>
+        )}
       </section>
 
       {isModalOpen && (
