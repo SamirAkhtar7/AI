@@ -28,7 +28,9 @@ const Project = () => {
   const [openFile, setOpenFile] = useState([]);
   const [messages, setMessages] = useState([]);
   const [openFolders, setOpenFolders] = useState(new Set());
-  const [webContainer, setWebContainer] = useState(null)
+  const [webContainer, setWebContainer] = useState(null);
+  const [runProcess, setRunProcess] = useState(null);
+  const [iframeUrl, setIframeUrl] = useState(null);
 
   // Toggle folder open/close
   const toggleFolder = (path) => {
@@ -87,10 +89,10 @@ const Project = () => {
     initializaSocket(project._id);
 
     if (!webContainer) {
-      getWebContainer().then(container => {
-        setWebContainer(container)
+      getWebContainer().then((container) => {
+        setWebContainer(container);
         console.log("container Started");
-      })
+      });
     }
 
     receiveMassage("project-message", (data) => {
@@ -110,12 +112,11 @@ const Project = () => {
           clean = clean.replace(/^```/, "").replace(/```$/, "").trim();
         }
 
-
         // Only parse if it looks like JSON
         if (clean.startsWith("{") || clean.startsWith("[")) {
           try {
             const parsed = JSON.parse(clean);
-            console.log(parsed)
+            console.log(parsed);
             if (parsed.fileTree) {
               setFileTree(parsed.fileTree);
               webContainer?.mount(parsed.fileTree);
@@ -266,13 +267,15 @@ const Project = () => {
   }
 
   function renderFileTree(tree, parentPath = "") {
+    if (!tree || typeof tree !== "object") return null; // Defensive check
+
     const folders = [];
     const files = [];
 
-    for (const [name, value] of Object.entries(tree)) {
-      if (value.children) {
+    for (const [name, value] of Object.entries(tree || {})) {
+      if (value && value.children) {
         folders.push([name, value]);
-      } else if (value.file) {
+      } else if (value && value.file) {
         files.push([name, value]);
       }
     }
@@ -404,9 +407,9 @@ const Project = () => {
           <div className="file-tree w-full">{renderFileTree(fileTree)}</div>
         </div>
 
-        {currentFile && (
-          <div className="code-editor h-full flex-grow flex flex-col">
-            <div className="top flex items-center ">
+        <div className="code-editor h-full flex-grow flex flex-col">
+          <div className="top flex items-center justify-between w-full  ">
+            <div className="files flex ">
               {openFile.map((file) => (
                 <button
                   key={file}
@@ -439,50 +442,108 @@ const Project = () => {
                 </button>
               ))}
             </div>
-            <div className="bottom flex-grow min-h-0">
-              <textarea
-                className="p-2 bg-slate-900 text-white h-full w-full overflow-auto m-0 resize-none"
-                value={getFileContent(fileTree, currentFile)}
-                onChange={e => {
-                  // Update fileTree with new content
-                  const updateTree = (tree, pathArr, content) => {
-                    if (pathArr.length === 0) return tree;
-                    const [head, ...rest] = pathArr;
-                    if (rest.length === 0) {
-                      // At file node
-                      if (tree[head] && tree[head].file) {
-                        return {
-                          ...tree,
-                          [head]: {
-                            ...tree[head],
-                            file: {
-                              ...tree[head].file,
-                              contents: content
-                            }
-                          }
-                        };
-                      }
-                      return tree;
-                    }
-                    if (tree[head] && tree[head].children) {
+
+            <div className="actions flex gap-2">
+              <button
+                onClick={async () => {
+                  await webContainer.mount(fileTree);
+
+                  // Run npm install and wait for it to finish
+                  const installProcess = await webContainer.spawn("npm", [
+                    "install",
+                  ]);
+                  await installProcess.exit; // Wait for install to finish
+
+                  installProcess.output.pipeTo(
+                    new WritableStream({
+                      write(chunk) {
+                       console.log(chunk)
+                      },
+                    })
+                  );
+
+                  if (runProcess) {
+                    runProcess.kill();
+                  }
+
+                  // Now start the server
+                  let tempRunProcess = await webContainer.spawn("npm", [
+                    "start",
+                  ]);
+                  tempRunProcess.output.pipeTo(
+                    new WritableStream({
+                      write(chunk) {
+                 console.log(chunk)
+                      },
+                    })
+                  );
+
+                  setRunProcess(tempRunProcess);
+
+                  webContainer.on("server-ready", (port, url) => {
+                    console.log(port,url)
+                    setIframeUrl(url);
+                  });
+                }}
+                className="p-2 px-4 bg-slate-300 text-white"
+              >
+                run
+              </button>
+            </div>
+          </div>
+          <div className="bottom flex-grow min-h-0">
+            <textarea
+              className="p-2 bg-slate-900 text-white h-full w-full overflow-auto m-0 resize-none"
+              value={getFileContent(fileTree, currentFile)}
+              onChange={(e) => {
+                // Update fileTree with new content
+                const updateTree = (tree, pathArr, content) => {
+                  if (pathArr.length === 0) return tree;
+                  const [head, ...rest] = pathArr;
+                  if (rest.length === 0) {
+                    // At file node
+                    if (tree[head] && tree[head].file) {
                       return {
                         ...tree,
                         [head]: {
                           ...tree[head],
-                          children: updateTree(tree[head].children, rest, content)
-                        }
+                          file: {
+                            ...tree[head].file,
+                            contents: content,
+                          },
+                        },
                       };
                     }
                     return tree;
-                  };
-                  setFileTree(prev =>
-                    updateTree(prev, currentFile.split("/"), e.target.value)
-                  );
-                }}
-              />
-            </div>
+                  }
+                  if (tree[head] && tree[head].children) {
+                    return {
+                      ...tree,
+                      [head]: {
+                        ...tree[head],
+                        children: updateTree(
+                          tree[head].children,
+                          rest,
+                          content
+                        ),
+                      },
+                    };
+                  }
+                  return tree;
+                };
+                setFileTree((prev) =>
+                  updateTree(prev, currentFile.split("/"), e.target.value)
+                );
+              }}
+            />
           </div>
-        )}
+        </div>
+
+        {
+          iframeUrl && webContainer &&
+          <iframe src={iframeUrl} className="w-1/2 h-full" > </iframe>
+}
+        
       </section>
 
       {isModalOpen && (
