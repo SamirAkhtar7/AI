@@ -152,6 +152,20 @@ const Project = () => {
     }
   }, [isSidePanalOpen]);
 
+  function saveFileTree(ft) {
+    axios
+      .put("/projects/update-file-tree", {
+        projectId: project._id,
+        fileTree: ft,
+      })
+      .then((res) => {
+        console.log(res.data);
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  }
+
   // --- Message sending ---
   const send = () => {
     if (!message.trim()) {
@@ -409,7 +423,7 @@ const Project = () => {
 
         <div className="code-editor h-full flex-grow flex flex-col">
           <div className="top flex items-center justify-between w-full  ">
-            <div className="files flex ">
+            <div className="files flex  ">
               {openFile.map((file) => (
                 <button
                   key={file}
@@ -444,6 +458,17 @@ const Project = () => {
             </div>
 
             <div className="actions flex gap-2">
+              <button
+                onClick={() => {
+                  // Save the current fileTree to the backend
+                  if (project && project._id && fileTree) {
+                    saveFileTree(fileTree);
+                  }
+                }}
+                className="p-2 px-4 bg-green-600 text-white rounded"
+              >
+                Save FileTree
+              </button>
               <button
                 onClick={async () => {
                   await webContainer.mount(fileTree);
@@ -531,9 +556,18 @@ const Project = () => {
                   }
                   return tree;
                 };
-                setFileTree((prev) =>
-                  updateTree(prev, currentFile.split("/"), e.target.value)
-                );
+                setFileTree((prev) => {
+                  if (!currentFile) return prev;
+                  const updated = updateTree(
+                    prev,
+                    currentFile.split("/"),
+                    e.target.value
+                  );
+                  if (project && project._id && updated) {
+                    saveFileTree(updated);
+                  }
+                  return updated;
+                });
               }}
             />
           </div>
@@ -542,12 +576,18 @@ const Project = () => {
         {iframeUrl && webContainer && (
           <div className="flex flex-col min-w-9 6 h-full">
             <div className="address-bar">
-              <input onChange={(e) => {
-                setIframeUrl(e.target.value)
-              }} type="text" value={iframeUrl} className="w-full p-2 px-4 bg-emerald-50  " name="" id="" />
+              <input
+                onChange={(e) => {
+                  setIframeUrl(e.target.value);
+                }}
+                type="text"
+                value={iframeUrl}
+                className="w-full p-2 px-4 bg-emerald-50  "
+                name=""
+                id=""
+              />
             </div>
-            <iframe src={iframeUrl} className="w-full h-full">
-            </iframe>
+            <iframe src={iframeUrl} className="w-full h-full"></iframe>
           </div>
         )}
       </section>

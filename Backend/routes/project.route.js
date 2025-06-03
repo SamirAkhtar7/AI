@@ -16,8 +16,8 @@ router.get("/all", authMiddleWare.authUser, projectController.getAllProject);
 
 router.put(
   "/add-user",
-    authMiddleWare.authUser,
-  body('projectId').isString().withMessage('Project ID id required'),
+  authMiddleWare.authUser,
+  body("projectId").isString().withMessage("Project ID id required"),
   body("users")
     .isArray({ min: 1 })
     .withMessage("Users must be an array of strings")
@@ -27,7 +27,18 @@ router.put(
   projectController.addUserToProject
 );
 
+router.get(
+  "/get-project/:projectId",
+  authMiddleWare.authUser,
+  projectController.getProjectById
+);
 
-router.get('/get-project/:projectId',authMiddleWare.authUser,projectController.getProjectById)
+router.put(
+  "/update-file-tree",
+  authMiddleWare.authUser,
+  body("projectId").isString().withMessage("Project ID is required"),
+  body("fileTree").isObject().withMessage("File tree is required "),
+  projectController.updateFileTree
+);
 
 export default router;
