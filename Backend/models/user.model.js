@@ -3,6 +3,13 @@ import bcrypt from "bcrypt";
 import jwt from 'jsonwebtoken';
 
 const userSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    require: true,
+    trim: true,
+    minLength: [3, "Name must be at least 3 characters long"],
+    maxLenght: [20, "Name must not be longer than 20 charaters"],
+  },
   email: {
     type: String,
     require: true,
@@ -12,8 +19,8 @@ const userSchema = new mongoose.Schema({
     maxLenght: [50, "Email must not be longer than 50 charaters"],
   },
   password: {
-      type: String,
-      select :false,
+    type: String,
+    select: false,
   },
 });
 

@@ -41,4 +41,11 @@ router.put(
   projectController.updateFileTree
 );
 
+router.delete(
+  "/delete/:projectId",
+  authMiddleWare.authUser,
+  body("projectId").isString().withMessage("Project ID is required"),
+  projectController.deleteProject
+);
+
 export default router;

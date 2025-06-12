@@ -10,6 +10,38 @@ import {
   receiveMassage,
   sendMessage,
 } from "../config/socket";
+import {
+  FaUserPlus,
+  FaUsers,
+  FaFolder,
+  FaFileAlt,
+  FaChevronDown,
+  FaChevronRight,
+  FaSave,
+  FaPlay,
+  FaTimes,
+  FaCommentDots,
+} from "react-icons/fa";
+import hljs from "highlight.js";
+import "highlight.js/styles/vs2015.css"; // VS Code-like theme
+import Prism from "prismjs";
+import "prismjs/themes/prism-tomorrow.css"; // Already imported
+
+// Helper to detect language from file extension
+function getLanguageFromFilename(filename) {
+  if (!filename) return "javascript";
+  if (filename.endsWith(".js")) return "javascript";
+  if (filename.endsWith(".json")) return "json";
+  if (filename.endsWith(".jsx")) return "jsx";
+  if (filename.endsWith(".ts")) return "typescript";
+  if (filename.endsWith(".tsx")) return "tsx";
+  if (filename.endsWith(".css")) return "css";
+  if (filename.endsWith(".html")) return "html";
+  if (filename.endsWith(".md")) return "markdown";
+  return "javascript";
+}
+
+const fontFamily = "'Poppins', 'Montserrat', 'Segoe UI', Arial, sans-serif";
 
 const Project = () => {
   const container = useRef();
@@ -26,11 +58,13 @@ const Project = () => {
   const [fileTree, setFileTree] = useState({});
   const [currentFile, setCurrentFile] = useState(null);
   const [openFile, setOpenFile] = useState([]);
-  const [messages, setMessages] = useState([]);
   const [openFolders, setOpenFolders] = useState(new Set());
   const [webContainer, setWebContainer] = useState(null);
   const [runProcess, setRunProcess] = useState(null);
   const [iframeUrl, setIframeUrl] = useState(null);
+
+  const [runStatus, setRunStatus] = useState("idle");
+  
 
   // Toggle folder open/close
   const toggleFolder = (path) => {
@@ -116,7 +150,6 @@ const Project = () => {
         if (clean.startsWith("{") || clean.startsWith("[")) {
           try {
             const parsed = JSON.parse(clean);
-            console.log(parsed);
             if (parsed.fileTree) {
               setFileTree(parsed.fileTree);
               webContainer?.mount(parsed.fileTree);
@@ -126,31 +159,68 @@ const Project = () => {
           }
         }
       }
-      appendIncomingMessage(data); // <-- keep this if you want DOM messages
-      // REMOVE setMessages((prev) => [...prev, data]);
+      // Only append incoming messages if not from the current user
+      if (data.sender && data.sender._id !== user._id) {
+        appendIncomingMessage(data);
+      }
     });
   }, []);
+
+  async function handleRun() {
+    setRunStatus("starting");
+    try {
+      await webContainer.mount(fileTree);
+      const installProcess = await webContainer.spawn("npm", ["install"]);
+      await installProcess.exit;
+      installProcess.output.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            console.log(chunk);
+          },
+        })
+      );
+      if (runProcess && typeof runProcess.kill === "function") {
+        runProcess.kill();
+      }
+      let tempRunProcess = await webContainer.spawn("npm", ["start"]);
+      tempRunProcess.output.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            console.log(chunk);
+          },
+        })
+      );
+      setRunProcess(tempRunProcess);
+      webContainer.on("server-ready", (port, url) => {
+        setIframeUrl(url);
+        setRunStatus("running");
+      });
+    } catch (err) {
+      setRunStatus("error");
+      alert("Failed to run project: " + (err?.message || err));
+    }
+  }
 
   // --- GSAP Side Panel Animation ---
   useEffect(() => {
     gsap.set(container.current, { x: "-100%" });
   }, []);
 
-  useEffect(() => {
-    if (isSidePanalOpen) {
-      gsap.to(container.current, {
-        x: "0%",
-        duration: 0.5,
-        ease: "power2.out",
-      });
-    } else {
-      gsap.to(container.current, {
-        x: "-100%",
-        duration: 0.5,
-        ease: "power2.out",
-      });
-    }
-  }, [isSidePanalOpen]);
+  // useEffect(() => {
+  //   if (isSidePanalOpen) {
+  //     gsap.to(container.current, {
+  //       x: "0%",
+  //       duration: 0.5,
+  //       ease: "power2.out",
+  //     });
+  //   } else {
+  //     gsap.to(container.current, {
+  //       x: "-100%",
+  //       duration: 0.5,
+  //       ease: "power2.out",
+  //     });
+  //   }
+  // }, [isSidePanalOpen]);
 
   function saveFileTree(ft) {
     axios
@@ -158,9 +228,7 @@ const Project = () => {
         projectId: project._id,
         fileTree: ft,
       })
-      .then((res) => {
-        console.log(res.data);
-      })
+      .then(() => {})
       .catch((err) => {
         console.log(err);
       });
@@ -168,10 +236,7 @@ const Project = () => {
 
   // --- Message sending ---
   const send = () => {
-    if (!message.trim()) {
-      console.error("Message is empty");
-      return;
-    }
+    if (!message.trim()) return;
     sendMessage("project-message", {
       message,
       sender: user,
@@ -190,7 +255,7 @@ const Project = () => {
 
   // --- DOM Message Rendering ---
   const appendIncomingMessage = (messageObject) => {
-    const messagesBox = document.querySelector(".message-box");
+    const messagesBoxEl = document.querySelector(".message-box");
     const newMessage = document.createElement("div");
 
     newMessage.classList.add(
@@ -200,10 +265,9 @@ const Project = () => {
       "flex",
       "flex-col",
       "p-2",
-      "bg-slate-50",
-      "w-fit",
-      "rounded-md",
-      "break-words"
+      "rounded-xl",
+      "break-words",
+      "shadow"
     );
 
     const senderNameOrEmail =
@@ -212,19 +276,51 @@ const Project = () => {
         : messageObject.sender?.email || "Unknown";
 
     if (messageObject.sender._id === "ai") {
-      // Only call marked if messageObject.message is a string
-      let renderedMarkdown = "";
-      if (typeof messageObject.message === "string") {
-        renderedMarkdown = marked(messageObject.message);
+      let text = "";
+      try {
+        const parsed = JSON.parse(messageObject.message);
+        if (parsed && typeof parsed.text === "string") {
+          text = parsed.text;
+        } else {
+          text = messageObject.message;
+        }
+      } catch {
+        text = messageObject.message;
       }
-      newMessage.innerHTML = `<small class="opacity-55 text-xs">${senderNameOrEmail}</small>
-        <div class="text-sm overflow-auto bg-slate-950 text-white p-2 rounded-xl ">${renderedMarkdown}</div>`;
+
+      // Use PrismJS to highlight code blocks
+      // This regex finds all ```lang ... ``` blocks
+      let html = text.replace(
+        /```(\w+)?\n([\s\S]*?)```/g,
+        (match, lang, code) => {
+          const language = Prism.languages[lang] || Prism.languages.javascript;
+          const highlighted = Prism.highlight(
+            code,
+            language,
+            lang || "javascript"
+          );
+          return `<pre class="language-${lang}"><code class="language-${lang}">${highlighted}</code></pre>`;
+        }
+      );
+
+      // For inline code
+      html = html.replace(/`([^`]+)`/g, (match, code) => {
+        return `<code style="background:#23272f;color:#00eaff;padding:2px 6px;border-radius:6px;">${code}</code>`;
+      });
+
+      newMessage.innerHTML = `<small class="opacity-55 text-xs text-white">${senderNameOrEmail}</small>
+        <div class="text-sm overflow-auto bg-[#23272f] text-[#e0eafc] p-2 rounded-xl border border-blue-900" style="font-family: 'Fira Mono', 'Consolas', monospace;">${html}</div>`;
+      newMessage.style.background =
+        "linear-gradient(135deg,#23272f 60%,#2d3748 100%)";
+      newMessage.style.color = "#fff";
     } else {
-      newMessage.innerHTML = `<small class="opacity-55 text-xs">${senderNameOrEmail}</small>
-        <p class="text-sm">${messageObject.message || ""}</p>`;
+      newMessage.innerHTML = `<small class="opacity-55 text-xs text-white">${senderNameOrEmail}</small>
+        <p class="text-sm text-white">${messageObject.message || ""}</p>`;
+      newMessage.style.background = "rgba(255,255,255,0.08)";
+      newMessage.style.color = "#fff";
     }
 
-    messagesBox.appendChild(newMessage);
+    messagesBoxEl.appendChild(newMessage);
     scrollToBottom();
   };
 
@@ -240,15 +336,16 @@ const Project = () => {
       "flex",
       "flex-col",
       "p-2",
-      "bg-slate-50",
-      "w-fit",
-      "rounded-md",
-      "break-words"
+      "rounded-xl",
+      "break-words",
+      "shadow"
     );
-    newMessage.innerHTML = `<small class="opacity-55 text-xs">${
+    newMessage.innerHTML = `<small class="opacity-55 text-xs text-white">${
       messageObject.sender?.email || "Unknown"
     }</small>
-      <p class="text-sm">${messageObject.message}</p>`;
+      <p class="text-sm text-white">${messageObject.message}</p>`;
+    newMessage.style.background = "rgba(255,255,255,0.12)";
+    newMessage.style.color = "#fff";
     box.appendChild(newMessage);
     scrollToBottom();
   };
@@ -262,26 +359,22 @@ const Project = () => {
       const part = parts[i];
       if (!node[part]) return "";
       if (node[part].file) {
-        // If this is the last part, return contents
         if (i === parts.length - 1) {
           return node[part].file.contents ?? "";
         }
-        // If not last part but it's a file, invalid path
         return "";
       }
       if (node[part].children) {
         node = node[part].children;
       } else {
-        // If neither file nor children, invalid path
         return "";
       }
     }
-    // If the path points to a folder, not a file
     return "";
   }
 
   function renderFileTree(tree, parentPath = "") {
-    if (!tree || typeof tree !== "object") return null; // Defensive check
+    if (!tree || typeof tree !== "object") return null;
 
     const folders = [];
     const files = [];
@@ -303,13 +396,18 @@ const Project = () => {
           const fullPath = parentPath ? `${parentPath}/${name}` : name;
           const isOpen = openFolders.has(fullPath);
           return (
-            <div key={fullPath} className="ml-4">
+            <div key={fullPath} className="ml-2">
               <div
-                className="font-bold text-base cursor-pointer flex items-center"
+                className="font-semibold text-base cursor-pointer flex items-center py-1 px-2 rounded hover:bg-[#2d3748] text-white transition"
                 onClick={() => toggleFolder(fullPath)}
               >
-                <span className="mr-1">{isOpen ? "▼" : "▶"}</span>
-                {name}/
+                {isOpen ? (
+                  <FaChevronDown className="mr-1 text-blue-400" />
+                ) : (
+                  <FaChevronRight className="mr-1 text-blue-400" />
+                )}
+                <FaFolder className="mr-2 text-yellow-400" />
+                {name}
               </div>
               {isOpen && (
                 <div className="ml-2">
@@ -328,9 +426,10 @@ const Project = () => {
                 setCurrentFile(fullPath);
                 setOpenFile(Array.from(new Set([...openFile, fullPath])));
               }}
-              className="tree-element p-2 cursor-pointer px-4 flex items-center gap-2 bg-slate-200 w-full"
+              className="tree-element p-2 cursor-pointer px-4 flex items-center gap-2 bg-[#23272f] hover:bg-[#2d3748] w-full rounded transition text-white"
             >
-              <p className="font-semibold text-lg">{name}</p>
+              <FaFileAlt className="text-blue-300" />
+              <p className="font-medium text-base">{name}</p>
             </button>
           );
         })}
@@ -340,102 +439,126 @@ const Project = () => {
 
   // --- UI ---
   return (
-    <main className="h-screen w-screen flex">
-      <section className="left relative flex flex-col h-screen min-w-70 bg-teal-500">
-        <header className="flex justify-between items-center p-2 px-4 w-full bg-slate-300">
+    <main
+      className="h-screen w-screen flex flex-col md:flex-row"
+      style={{
+        fontFamily,
+        background: "linear-gradient(135deg, #232526 0%, #2d3748 100%)",
+        color: "#fff",
+      }}
+    >
+      {/* Left Panel */}
+      <section className="left relative flex flex-col h-[320px] md:h-screen w-full md:w-[320px] bg-gradient-to-b from-[#232526] via-[#414345] to-[#232526] shadow-2xl">
+        <header className="flex justify-between items-center p-3 w-full bg-[#23272f] border-b border-[#2d3748]">
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex p-2 px-4 gap-2 bg-blue-500 text-white rounded-md"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold shadow hover:scale-105 transition"
           >
-            <i className="ri-add-fill mr-1"></i>
-            <p>Add collaborator</p>
+            <FaUserPlus className="text-lg" />
+            Add collaborator
           </button>
-          <button
+          {/* <button
             onClick={() => setIsSidePanalOpen(!isSidePanalOpen)}
-            className="p-2"
+            className="p-2 rounded hover:bg-[#2d3748] transition"
+            title="Show Collaborators"
           >
-            <i className="ri-group-fill"></i>
-          </button>
+            <FaUsers className="text-xl text-blue-400" />
+          </button> */}
         </header>
 
+        {/* Chat Area */}
         <div className="conversatoin-area flex-grow flex flex-col p-2 min-h-0">
           <div
             ref={messagesBox}
-            className="message-box flex-grow flex flex-col gap-1 overflow-y-auto  min-h-0 max-h-full"
-          >
-            {/* messages are rendered by appendIncomingMessage/appendOutgoingMessage */}
-          </div>
+            className="message-box flex-grow flex flex-col gap-2 overflow-y-auto min-h-0 max-h-full px-1"
+            style={{ color: "#fff" }}
+          ></div>
           <div className="w-full flex items-center gap-2 mt-2">
             <input
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="flex-grow p-2 border rounded"
+              className="flex-grow p-2 border rounded-lg focus:ring-2 focus:ring-blue-400 transition bg-[#23272f] text-white"
               placeholder="Type your message..."
+              style={{ fontFamily }}
             />
             <button
               onClick={send}
-              className="px-4 py-2 bg-blue-600 text-white rounded"
+              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold shadow hover:scale-105 transition"
             >
-              Send
+              <FaCommentDots className="text-lg" />
             </button>
           </div>
         </div>
 
         {/* Sliding Side Panel */}
-        <div
+        {/* <div
           ref={container}
-          className="sediPanel w-full h-full flex flex-col gap-2 bg-red-600 absolute z-10 top-0"
+          className="sediPanel w-full h-full flex flex-col gap-2 bg-[#23272f] absolute z-20 top-0 left-0 shadow-2xl rounded-r-2xl"
         >
-          <header className="flex justify-between items-center p-2 px-3 bg-slate-200">
-            <h1 className="font-semibold"> collaborator</h1>
-            <button onClick={() => setIsSidePanalOpen(false)} className="p-2">
-              <i className="ri-close-fill"></i>
+          <header className="flex justify-between items-center p-3 bg-[#2d3748] rounded-t-2xl border-b">
+            <h1 className="font-semibold text-blue-300 flex items-center gap-2">
+              <FaUsers className="text-xl" /> Collaborators
+            </h1>
+            <button
+              onClick={() => setIsSidePanalOpen(false)}
+              className="p-2 rounded hover:bg-[#23272f] transition"
+            >
+              <FaTimes className="text-xl text-white" />
             </button>
           </header>
-
-          <div className="users flex flex-col gap-2">
+          <div className="users flex flex-col gap-2 p-2">
             {project && project.users && project.users.length > 0 ? (
               project.users.map((user) => (
                 <div
                   key={user._id}
-                  className="user cursor-pointer hover:bg-slate-200 p-2 flex gap-2 items-center"
+                  className="user cursor-pointer hover:bg-[#2d3748] p-2 flex gap-2 items-center rounded-lg transition"
                 >
-                  <div className="aspect-square rounded-full w-fit h-fit flex items-center justify-center p-5 text-white bg-slate-600">
-                    <i className="ri-user-fill absolute"></i>
+                  <div className="aspect-square rounded-full w-10 h-10 flex items-center justify-center text-white bg-gradient-to-br from-blue-500 to-purple-600 shadow">
+                    <FaUsers />
                   </div>
-                  <h1 className="font-semibold text-lg text-black">
+                  <h1 className="font-semibold text-base text-white">
                     {user.email || "No Email"}
                   </h1>
                 </div>
               ))
             ) : (
-              <p className="text-white">No users found</p>
+              <p className="text-gray-400">No users found</p>
             )}
           </div>
-        </div>
+        </div> */}
       </section>
 
-      <section className="right bg-slate-200 flex-grow h-full flex ">
-        <div className="explorer h-full max-w-64 min-w-52 flex  bg-slate-300">
-          <div className="file-tree w-full">{renderFileTree(fileTree)}</div>
+      {/* Main Editor Panel */}
+      <section className="right bg-[#2d3748] flex-grow h-full flex flex-col md:flex-row overflow-hidden">
+        {/* File Explorer */}
+        <div className="explorer h-full max-w-[260px] min-w-[140px] flex bg-gradient-to-b from-[#232526] to-[#2d3748] border-r border-[#23272f] shadow-inner">
+          <div className="file-tree w-full py-4 px-2">
+            {renderFileTree(fileTree)}
+          </div>
         </div>
 
-        <div className="code-editor h-full flex-grow flex flex-col">
-          <div className="top flex items-center justify-between w-full  ">
-            <div className="files flex  ">
+        {/* Code Editor and Preview */}
+        <div className="flex-1 flex flex-col h-full">
+          {/* Open Files Tabs & Actions */}
+          <div className="top flex flex-wrap items-center justify-between w-full px-4 py-2 bg-[#23272f] border-b border-[#2d3748] shadow-sm">
+            <div className="files flex flex-wrap gap-2">
               {openFile.map((file) => (
                 <button
                   key={file}
                   onClick={() => setCurrentFile(file)}
                   className={
-                    "open-file cursor-pointer p-2 px-4 flex items-center w-fit gap-2 bg-slate-300 " +
-                    (currentFile === file ? "bg-slate-400" : "")
+                    "open-file cursor-pointer px-4 py-2 flex items-center gap-2 rounded-t-lg font-medium shadow-sm " +
+                    (currentFile === file
+                      ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                      : "bg-[#2d3748] text-blue-200 hover:bg-blue-900")
                   }
+                  style={{ fontFamily }}
                 >
-                  <p className="font-semibold text-lg"> {file}</p>
+                  <FaFileAlt />
+                  <span>{file}</span>
                   <span
-                    className="p-2 cursor-pointer"
+                    className="ml-2 p-1 rounded hover:bg-red-100"
                     onClick={(e) => {
                       e.stopPropagation();
                       setOpenFile(openFile.filter((f) => f !== file));
@@ -451,177 +574,135 @@ const Project = () => {
                       }
                     }}
                   >
-                    <i className="ri-close-fill"></i>
+                    <FaTimes className="text-xs" />
                   </span>
                 </button>
               ))}
             </div>
-
             <div className="actions flex gap-2">
               <button
                 onClick={() => {
-                  // Save the current fileTree to the backend
                   if (project && project._id && fileTree) {
                     saveFileTree(fileTree);
                   }
                 }}
-                className="p-2 px-4 bg-green-600 text-white rounded"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold shadow hover:scale-105 transition"
               >
-                Save FileTree
+                <FaSave />
+                Save
               </button>
               <button
-                onClick={async () => {
-                  await webContainer.mount(fileTree);
-
-                  // Run npm install and wait for it to finish
-                  const installProcess = await webContainer.spawn("npm", [
-                    "install",
-                  ]);
-                  await installProcess.exit; // Wait for install to finish
-
-                  installProcess.output.pipeTo(
-                    new WritableStream({
-                      write(chunk) {
-                        console.log(chunk);
-                      },
-                    })
-                  );
-
-                  if (runProcess) {
-                    runProcess.kill();
-                  }
-
-                  // Now start the server
-                  let tempRunProcess = await webContainer.spawn("npm", [
-                    "start",
-                  ]);
-                  tempRunProcess.output.pipeTo(
-                    new WritableStream({
-                      write(chunk) {
-                        console.log(chunk);
-                      },
-                    })
-                  );
-
-                  setRunProcess(tempRunProcess);
-
-                  webContainer.on("server-ready", (port, url) => {
-                    console.log(port, url);
-                    setIframeUrl(url);
-                  });
-                }}
-                className="p-2 px-4 bg-slate-300 text-white"
+                onClick={handleRun}
+                className={`flex items-center gap-2 px-4 py-2 ${
+                  runStatus === "running"
+                    ? "bg-green-700"
+                    : runStatus === "starting"
+                    ? "bg-yellow-600"
+                    : runStatus === "error"
+                    ? "bg-red-700"
+                    : "bg-blue-600"
+                } text-white rounded-lg font-semibold shadow hover:scale-105 transition`}
+                disabled={runStatus === "starting"}
               >
-                run
+                <FaPlay />
+                {runStatus === "starting"
+                  ? "Starting..."
+                  : runStatus === "running"
+                  ? "Running"
+                  : runStatus === "error"
+                  ? "Error"
+                  : "Run"}
               </button>
             </div>
           </div>
-          <div className="bottom flex-grow min-h-0">
-            <textarea
-              className="p-2 bg-slate-900 text-white h-full w-full overflow-auto m-0 resize-none"
-              value={getFileContent(fileTree, currentFile)}
-              onChange={(e) => {
-                // Update fileTree with new content
-                const updateTree = (tree, pathArr, content) => {
-                  if (pathArr.length === 0) return tree;
-                  const [head, ...rest] = pathArr;
-                  if (rest.length === 0) {
-                    // At file node
-                    if (tree[head] && tree[head].file) {
-                      return {
-                        ...tree,
-                        [head]: {
-                          ...tree[head],
-                          file: {
-                            ...tree[head].file,
-                            contents: content,
-                          },
-                        },
-                      };
-                    }
-                    return tree;
-                  }
-                  if (tree[head] && tree[head].children) {
-                    return {
-                      ...tree,
-                      [head]: {
-                        ...tree[head],
-                        children: updateTree(
-                          tree[head].children,
-                          rest,
-                          content
-                        ),
-                      },
-                    };
-                  }
-                  return tree;
-                };
-                setFileTree((prev) => {
-                  if (!currentFile) return prev;
-                  const updated = updateTree(
-                    prev,
-                    currentFile.split("/"),
-                    e.target.value
-                  );
-                  if (project && project._id && updated) {
-                    saveFileTree(updated);
-                  }
-                  return updated;
-                });
+          {/* Code Editor */}
+          <div className="bottom flex-grow min-h-0 flex flex-col">
+            <div
+              className="p-4 bg-[#23272f] text-[#e0eafc] h-full w-full overflow-auto m-0 font-mono text-base rounded-b-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+              style={{
+                fontFamily: "'Fira Mono', 'Consolas', 'Menlo', monospace",
+                minHeight: "300px",
+                whiteSpace: "pre",
+                outline: "none",
+                border: "none",
+              }}
+              tabIndex={0}
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              dangerouslySetInnerHTML={{
+                __html: Prism.highlight(
+                  getFileContent(fileTree, currentFile) || "",
+                  Prism.languages[getLanguageFromFilename(currentFile)] ||
+                    Prism.languages.javascript,
+                  getLanguageFromFilename(currentFile)
+                ),
               }}
             />
           </div>
         </div>
 
+        {/* Live Preview */}
         {iframeUrl && webContainer && (
-          <div className="flex flex-col min-w-9 6 h-full">
-            <div className="address-bar">
+          <div className="flex flex-col min-w-[220px] h-full border-l border-[#23272f] bg-[#23272f] shadow-inner text-white">
+            <div className="address-bar p-2 bg-[#2d3748] border-b border-[#23272f]">
               <input
-                onChange={(e) => {
-                  setIframeUrl(e.target.value);
-                }}
+                onChange={(e) => setIframeUrl(e.target.value)}
                 type="text"
                 value={iframeUrl}
-                className="w-full p-2 px-4 bg-emerald-50  "
+                className="w-full p-2 px-4 rounded bg-[#23272f] border border-[#2d3748] font-mono text-xs text-white"
                 name=""
                 id=""
               />
             </div>
-            <iframe src={iframeUrl} className="w-full h-full"></iframe>
+            <iframe
+              src={iframeUrl}
+              className="w-full h-full rounded-b-lg bg-[#f1f1f1] text-white"
+              title="Live Preview"
+            ></iframe>
           </div>
         )}
       </section>
 
+      {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-4 rounded-md w-96 max-w-full relative">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div
+            className="bg-[#23272f] p-6 rounded-2xl w-full max-w-md relative shadow-2xl"
+            style={{ fontFamily, color: "#fff" }}
+          >
             <header className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Select User</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2">
-                <i className="ri-close-fill"></i>
+              <h2 className="text-xl font-bold text-blue-300 flex items-center gap-2">
+                <FaUserPlus /> Select User
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-2 rounded hover:bg-[#2d3748] transition"
+              >
+                <FaTimes className="text-xl text-white" />
               </button>
             </header>
-            <div className="users-list flex flex-col gap-2 mb-16 max-h-96 overflow-auto">
+            <div className="users-list flex flex-col gap-2 mb-16 max-h-80 overflow-auto">
               {users.map((user) => (
                 <div
                   key={user._id}
-                  className={`user cursor-pointer hover:bg-slate-200 ${
+                  className={`user cursor-pointer hover:bg-[#2d3748] ${
                     Array.from(selectedUserId).indexOf(user._id) !== -1
-                      ? "bg-slate-200"
+                      ? "bg-[#2d3748]"
                       : ""
-                  } p-2 flex gap-2 items-center`}
+                  } p-2 flex gap-2 items-center rounded-lg transition`}
                   onClick={() => handleUserClick(user._id)}
                 >
-                  <div className="aspect-square relative rounded-full w-fit h-fit flex items-center justify-center p-5 text-white bg-slate-600">
-                    <i className="ri-user-fill absolute"></i>
+                  <div className="aspect-square relative rounded-full w-10 h-10 flex items-center justify-center text-white bg-gradient-to-br from-blue-500 to-purple-600 shadow">
+                    <FaUsers />
                   </div>
-                  <h1 className="font-semibold text-lg">{user.email}</h1>
+                  <h1 className="font-semibold text-base">{user.email}</h1>
                 </div>
               ))}
             </div>
             <button
               onClick={addCollaborators}
-              className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-blue-600 text-white rounded-md"
+              className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold shadow hover:scale-105 transition"
             >
               Add Collaborators
             </button>
@@ -631,5 +712,14 @@ const Project = () => {
     </main>
   );
 };
+
+marked.setOptions({
+  highlight: function (code, lang) {
+    if (lang && hljs.getLanguage(lang)) {
+      return hljs.highlight(code, { language: lang }).value;
+    }
+    return hljs.highlightAuto(code).value;
+  },
+});
 
 export default Project;

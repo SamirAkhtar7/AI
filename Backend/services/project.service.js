@@ -122,3 +122,14 @@ export const updateFileTree = async ({ projectId, fileTree }) => {
   );
   return project;
 };
+
+export const deleteProjectById = async ({ projectId }) => {
+  if (!projectId) {
+    throw new Error("ProjectId is required")
+  }
+  if (!mongoose.Types.ObjectId.isValid(projectId)) {
+    throw new Error("Invalid project")
+  }
+    const deleteProject = await projectModel.findByIdAndDelete(projectId);
+   
+}
