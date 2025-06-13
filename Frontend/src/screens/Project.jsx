@@ -62,7 +62,6 @@ const Project = () => {
   const [webContainer, setWebContainer] = useState(null);
   const [runProcess, setRunProcess] = useState(null);
   const [iframeUrl, setIframeUrl] = useState(null);
-
   const [runStatus, setRunStatus] = useState("idle");
   
 
@@ -166,41 +165,6 @@ const Project = () => {
     });
   }, []);
 
-  async function handleRun() {
-    setRunStatus("starting");
-    try {
-      await webContainer.mount(fileTree);
-      const installProcess = await webContainer.spawn("npm", ["install"]);
-      await installProcess.exit;
-      installProcess.output.pipeTo(
-        new WritableStream({
-          write(chunk) {
-            console.log(chunk);
-          },
-        })
-      );
-      if (runProcess && typeof runProcess.kill === "function") {
-        runProcess.kill();
-      }
-      let tempRunProcess = await webContainer.spawn("npm", ["start"]);
-      tempRunProcess.output.pipeTo(
-        new WritableStream({
-          write(chunk) {
-            console.log(chunk);
-          },
-        })
-      );
-      setRunProcess(tempRunProcess);
-      webContainer.on("server-ready", (port, url) => {
-        setIframeUrl(url);
-        setRunStatus("running");
-      });
-    } catch (err) {
-      setRunStatus("error");
-      alert("Failed to run project: " + (err?.message || err));
-    }
-  }
-
   // --- GSAP Side Panel Animation ---
   useEffect(() => {
     gsap.set(container.current, { x: "-100%" });
@@ -232,6 +196,42 @@ const Project = () => {
       .catch((err) => {
         console.log(err);
       });
+  }
+
+
+
+  async function handleRun() {
+    setRunStatus("starting");
+    try {
+      await webContainer.mount(fileTree);
+      const installProcess = await webContainer.spawn("npm", ["install"]);
+      await installProcess.exit;
+      installProcess.output.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            console.log(chunk);
+          },
+        })
+      );
+      if (runProcess && typeof runProcess.kill === "function") {
+        runProcess.kill();
+      }
+      let tempRunProcess = await webContainer.spawn("npm", ["start"]);
+      tempRunProcess.output.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            console.log(chunk);
+          },
+        })
+      ); setRunProcess(tempRunProcess);
+      webContainer.on("server-ready", (port, url) => {
+        setIframeUrl(url);
+        setRunStatus("running");
+      });
+    } catch (err) {
+      setRunStatus("error");
+      alert("Failed to run project: " + (err?.message || err));
+    }
   }
 
   // --- Message sending ---
@@ -617,7 +617,7 @@ const Project = () => {
           </div>
           {/* Code Editor */}
           <div className="bottom flex-grow min-h-0 flex flex-col">
-            <div
+            <textarea
               className="p-4 bg-[#23272f] text-[#e0eafc] h-full w-full overflow-auto m-0 font-mono text-base rounded-b-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
               style={{
                 fontFamily: "'Fira Mono', 'Consolas', 'Menlo', monospace",
@@ -625,18 +625,41 @@ const Project = () => {
                 whiteSpace: "pre",
                 outline: "none",
                 border: "none",
+                resize: "none",
               }}
               tabIndex={0}
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
-              dangerouslySetInnerHTML={{
-                __html: Prism.highlight(
-                  getFileContent(fileTree, currentFile) || "",
-                  Prism.languages[getLanguageFromFilename(currentFile)] ||
-                    Prism.languages.javascript,
-                  getLanguageFromFilename(currentFile)
-                ),
+              
+              value={getFileContent(fileTree, currentFile) || ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Update fileTree immutably
+                setFileTree((prevTree) => {
+                  if (!currentFile) return prevTree;
+                  const parts = currentFile.split("/");
+                  const newTree = { ...prevTree };
+                  let node = newTree;
+                  for (let i = 0; i < parts.length; i++) {
+                    const part = parts[i];
+                    if (i === parts.length - 1) {
+                      if (node[part] && node[part].file) {
+                        node[part] = {
+                          ...node[part],
+                          file: {
+                            ...node[part].file,
+                            contents: value,
+                          },
+                        };
+                      }
+                    } else {
+                      node[part] = { ...node[part] };
+                      node = node[part].children;
+                    }
+                  }
+                  return newTree;
+                });
               }}
             />
           </div>
