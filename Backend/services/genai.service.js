@@ -98,7 +98,7 @@ async function generateAIContent(prompt) {
     });
     const result = await model.generateContent(prompt);
     const response = result.response;
-    console.log(response.text());
+  
     return response.text();
   } catch (error) {
     console.error("Error generating content:", error);

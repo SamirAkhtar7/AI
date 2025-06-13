@@ -26,8 +26,7 @@ io.use(async (socket, next) => {
 
      const projectId = socket.handshake.query.projectId;
 
-    console.log("Token:", token); // Debugging
-    console.log("Project ID:", projectId); // Debugging
+   
 
     if (!mongoose.Types.ObjectId.isValid(projectId)) {
       return next(new Error("Authentication error: Invalid project ID"));
@@ -53,7 +52,7 @@ io.use(async (socket, next) => {
 
 io.on("connection", (socket) => {
  socket.roomId = socket.Project._id.toString()
-  console.log("A user connected to project:", socket.roomId);
+
 
   socket.join(socket.roomId);
 
@@ -62,7 +61,7 @@ io.on("connection", (socket) => {
     const message = data.message;
     const aiIsPresentInMessage = message.includes('@ai');
     if (aiIsPresentInMessage) {
-      console.log("Received AI-message:"); // Debugging
+      // Debugging
       const prompt = message.replace('@ai',"")
       const result = await generateAIContent(prompt)
 
