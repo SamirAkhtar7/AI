@@ -14,7 +14,9 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "https://ai-1-yd7j.onrender.com",
+
+    // origin: "http://localhost:5173",
+     origin: "https://ai-1-yd7j.onrender.com",
   },
 });
 
