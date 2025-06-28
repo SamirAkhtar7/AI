@@ -1,6 +1,7 @@
 import "dotenv/config";
 import app from "./app.js";
 import http from "http";
+import path from "path";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
@@ -13,6 +14,10 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(express.static(path.join(process.cwd(), "build")));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(process.cwd(), "build", "index.html"));
+});
 const port = process.env.PORT || 3000;
 
 const server = http.createServer(app);
