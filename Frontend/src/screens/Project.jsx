@@ -63,7 +63,6 @@ const Project = () => {
   const [runProcess, setRunProcess] = useState(null);
   const [iframeUrl, setIframeUrl] = useState(null);
   const [runStatus, setRunStatus] = useState("idle");
-  
 
   // Toggle folder open/close
   const toggleFolder = (path) => {
@@ -198,9 +197,13 @@ const Project = () => {
       });
   }
 
-
-
   async function handleRun() {
+    if (!webContainer) {
+      alert(
+        "WebContainer is not ready yet. Please wait a moment and try again."
+      );
+      return;
+    }
     setRunStatus("starting");
     try {
       await webContainer.mount(fileTree);
@@ -223,7 +226,8 @@ const Project = () => {
             console.log(chunk);
           },
         })
-      ); setRunProcess(tempRunProcess);
+      );
+      setRunProcess(tempRunProcess);
       webContainer.on("server-ready", (port, url) => {
         setIframeUrl(url);
         setRunStatus("running");
@@ -602,7 +606,7 @@ const Project = () => {
                     ? "bg-red-700"
                     : "bg-blue-600"
                 } text-white rounded-lg font-semibold shadow hover:scale-105 transition`}
-                disabled={runStatus === "starting"}
+                disabled={runStatus === "starting" || !webContainer}
               >
                 <FaPlay />
                 {runStatus === "starting"
@@ -631,7 +635,6 @@ const Project = () => {
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
-              
               value={getFileContent(fileTree, currentFile) || ""}
               onChange={(e) => {
                 const value = e.target.value;
